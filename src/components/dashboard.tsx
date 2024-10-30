@@ -17,44 +17,58 @@ interface BlogPost {
   createdAt: number
 }
 
+
 function processMarkdown(text: string, images?: { [key: string]: string }): string {
-  // Process headings first (to avoid conflicts)
-  let processedText = text
-    .replace(/^### (.*$)/gm, '<h3 class="text-xl font-bold mt-6 mb-3">$1</h3>')
-    .replace(/^## (.*$)/gm, '<h2 class="text-2xl font-bold mt-8 mb-4">$1</h2>')
-    .replace(/^# (.*$)/gm, '<h1 class="text-3xl font-bold mt-10 mb-5">$1</h1>')
-    
-    // Process nested bullet points with bold
-    .replace(/^-- \*\*(.*?)\*\*/gm, '<li class="ml-8 mb-1"><strong>$1</strong></li>')
-    .replace(/^-- (.*$)/gm, '<li class="ml-8 mb-1">$1</li>')
-    .replace(/^- \*\*(.*?)\*\*/gm, '<li class="mb-1"><strong>$1</strong></li>')
-    .replace(/^- (.*$)/gm, '<li class="mb-1">$1</li>')
-    
-    // Process remaining bold text
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    
-    // Wrap lists in ul tags
-    .replace(/(<li.*?<\/li>)[\n\r]*(<li.*?<\/li>)/g, '<ul class="my-4">$1$2</ul>')
-
-  // Handle images
-  if (images) {
-    processedText = processedText.replace(/!\[Image\]$$(\d+-\d+)$$/g, (_, imageKey) => {
-      const imageUrl = images[imageKey]
-      return imageUrl ? `<img src="${imageUrl}" alt="Content image" class="my-4 rounded-lg max-w-full h-auto shadow-sm" />` : ''
-    })
-  }
-
-  // Handle paragraphs and line breaks
-  processedText = processedText
-    .replace(/\n\n/g, '</p><p class="my-1">')
-    .replace(/\n/g, '<br />')
-
-  // Wrap in paragraph if not already wrapped in HTML
-  if (!processedText.match(/^<[^>]+>/)) {
-    processedText = `<p class="my-1">${processedText}</p>`
-  }
-
-  return processedText
+    // Process headings first (to avoid conflicts)
+    let processedText = text
+      .replace(/^### (.*$)/gm, '<h3 class="text-xl font-bold mt-6 mb-3">$1</h3>')
+      .replace(/^## (.*$)/gm, '<h2 class="text-2xl font-bold mt-8 mb-4">$1</h2>')
+      .replace(/^# (.*$)/gm, '<h1 class="text-3xl font-bold mt-10 mb-5">$1</h1>')
+      
+      // Process nested bullet points with bold
+      .replace(/^-- \*\*(.*?)\*\*/gm, '<li class="ml-8 mb-1"><strong>$1</strong></li>')
+      .replace(/^-- (.*$)/gm, '<li class="ml-8 mb-1">$1</li>')
+      .replace(/^- \*\*(.*?)\*\*/gm, '<li class="mb-1"><strong>$1</strong></li>')
+      .replace(/^- (.*$)/gm, '<li class="mb-1">$1</li>')
+      
+      // Process remaining bold text
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      
+      // Wrap lists in ul tags
+      .replace(/(<li.*?<\/li>)[\n\r]*(<li.*?<\/li>)/g, '<ul class="my-4">$1$2</ul>')
+  
+    // Handle images
+    if (images) {
+      processedText = processedText.replace(/!\[Image\]$$(\d+-\d+)$$/g, (_, imageKey) => {
+        const imageUrl = images[imageKey]
+        if (!imageUrl) return ''
+        
+        return `
+          <div class="relative my-4 max-w-full">
+            <img
+              src="${imageUrl}"
+              alt="Content image"
+              class="rounded-lg shadow-sm max-w-full h-auto mx-auto"
+              style="max-height: 500px; object-fit: contain;"
+              loading="lazy"
+            />
+          </div>
+        `
+      })
+    }
+  
+    // Handle paragraphs and line breaks
+    processedText = processedText
+      .replace(/\n\n/g, '</p><p class="my-1">')
+      .replace(/\n/g, '<br />')
+  
+    // Wrap in paragraph if not already wrapped in HTML
+    if (!processedText.match(/^<[^>]+>/)) {
+      processedText = `<p class="my-1">${processedText}</p>`
+    }
+  
+    return processedText
+  
 }
 
 function Logo() {
@@ -175,14 +189,18 @@ function BlogPostForm({ post, onSubmit, onCancel }: BlogPostFormProps) {
                   Insert Image
                 </Button>
               </DialogTrigger>
-              <DialogContent>
+              <DialogContent aria-describedby="dialog-description">
                 <DialogHeader>
                   <DialogTitle>Upload Image</DialogTitle>
+                  <p id="dialog-description" className="text-sm text-muted-foreground">
+                    Select an image file to upload to your post.
+                  </p>
                 </DialogHeader>
                 <Input
                   type="file"
                   onChange={(e) => handleImageUpload(e, index)}
                   accept="image/*"
+                  aria-label="Upload image"
                 />
               </DialogContent>
             </Dialog>
@@ -191,17 +209,11 @@ function BlogPostForm({ post, onSubmit, onCancel }: BlogPostFormProps) {
                 if (key.startsWith(`${index}-`)) {
                   return (
                     <div key={key} className="relative w-10 h-10">
-                      <Image 
+                      <img 
                         src={url}
                         alt={`Content image ${key}`}
-                        fill
-                        sizes="40px"
-                        className="object-cover rounded shadow-sm"
-                        style={{ objectFit: 'cover' }}
-                        priority={true}
-                        onError={(e) => {
-                          console.error(`Error loading image ${key}:`, e)
-                        }}
+                        className="object-cover rounded shadow-sm w-full h-full"
+                        loading="lazy"
                       />
                     </div>
                   )
@@ -464,18 +476,30 @@ export default function Dashboard() {
     }
   }
 
-  const updatePost = (updatedPost: BlogPost) => {
+  const updatePost = async (updatedPost: BlogPost) => {
     if (!updatedPost?.id) return
-    const processedPost = {
-      ...updatedPost,
-      content: updatedPost.content.map(text => text),
-      images: updatedPost.images || {},
-      createdAt: posts.find(p => p.id === updatedPost.id)?.createdAt || Date.now()
+    
+    try {
+      const response = await fetch(`/api/posts/${updatedPost.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: updatedPost.title,
+          content: updatedPost.content,
+          images: updatedPost.images || {}
+        }),
+      })
+      
+      if (response.ok) {
+        const processedPost = await response.json()
+        setPosts(posts.map(post => post.id === updatedPost.id ? processedPost : post))
+        setSelectedPost(null)
+        setIsEditing(false)
+        setEditingPost(null)
+      }
+    } catch (error) {
+      console.error('Error updating post:', error)
     }
-    setPosts(posts.map(post => post.id === updatedPost.id ? processedPost : post))
-    setSelectedPost(null)
-    setIsEditing(false)
-    setEditingPost(null)
   }  
   
   const deletePost = (id: number) => {

@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
+    domains: ['*'],
     remotePatterns: [
       {
         protocol: 'https',
@@ -9,7 +10,7 @@ const nextConfig = {
     ],
     dangerouslyAllowSVG: true,
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
-    unoptimized: true // This allows base64 images
+    unoptimized: true
   },
   eslint: {
     ignoreDuringBuilds: true,
