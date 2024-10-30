@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { PlusCircle, Activity, ImageIcon } from 'lucide-react'
@@ -189,12 +190,20 @@ function BlogPostForm({ post, onSubmit, onCancel }: BlogPostFormProps) {
               {Object.entries(images).map(([key, url]) => {
                 if (key.startsWith(`${index}-`)) {
                   return (
-                    <img 
-                      key={key}
-                      src={url} 
-                      alt={`Preview ${key}`} 
-                      className="h-10 w-10 object-cover rounded"
-                    />
+                    <div key={key} className="relative w-10 h-10">
+                      <Image 
+                        src={url}
+                        alt={`Content image ${key}`}
+                        fill
+                        sizes="40px"
+                        className="object-cover rounded shadow-sm"
+                        style={{ objectFit: 'cover' }}
+                        priority={true}
+                        onError={(e) => {
+                          console.error(`Error loading image ${key}:`, e)
+                        }}
+                      />
+                    </div>
                   )
                 }
                 return null

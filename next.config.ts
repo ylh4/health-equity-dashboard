@@ -7,8 +7,19 @@ const nextConfig = {
     ignoreBuildErrors: true,
   },
   images: {
-    domains: ['*'], // Be more specific in production
-    unoptimized: true
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+      {
+        protocol: 'data',
+        hostname: '**',
+      },
+    ],
+    dangerouslyAllowSVG: true,
+    contentDispositionType: 'attachment',
+    contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
   }
 }
 
