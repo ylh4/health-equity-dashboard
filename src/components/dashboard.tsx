@@ -418,17 +418,42 @@ export default function Dashboard() {
     return null
   }
 
-  const addPost = (post: Omit<BlogPost, 'id' | 'createdAt'>) => {
-    const newPost = {
-      ...post,
-      id: Date.now(),
-      createdAt: Date.now(),
-      content: post.content.map(text => processMarkdown(text, post.images)),
-      images: post.images || {}
+// Fetch posts
+useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        const response = await fetch('/api/posts')
+        if (response.ok) {
+          const data = await response.json()
+          setPosts(data)
+        }
+      } catch (error) {
+        console.error('Error fetching posts:', error)
+      }
     }
-    setPosts([newPost, ...posts])
-    setIsEditing(false)
-    setEditingPost(null)
+  
+    if (isAuthenticated) {
+      fetchPosts()
+    }
+  }, [isAuthenticated])
+  
+  // Update addPost function
+  const addPost = async (post: Omit<BlogPost, 'id' | 'createdAt'>) => {
+    try {
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(post),
+      })
+      if (response.ok) {
+        const newPost = await response.json()
+        setPosts([newPost, ...posts])
+        setIsEditing(false)
+        setEditingPost(null)
+      }
+    } catch (error) {
+      console.error('Error adding post:', error)
+    }
   }
 
   const updatePost = (updatedPost: BlogPost) => {
@@ -526,4 +551,5 @@ export default function Dashboard() {
       </footer>
     </div>
   )
+  
 }
