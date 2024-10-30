@@ -31,7 +31,7 @@ export default function BlogPostList({
     <div className="space-y-4">
       {posts.length === 0 ? (
         <div className="text-center py-8">
-          <p className="text-muted-foreground">No posts yet. Click "New Monthly Report" to create one.</p>
+          <p className="text-muted-foreground">No posts yet. Click &quot;New Monthly Report&quot; to create one.</p>
         </div>
       ) : (
         posts.map((post) => (

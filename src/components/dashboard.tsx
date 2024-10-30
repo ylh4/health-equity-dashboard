@@ -33,7 +33,7 @@ function processMarkdown(text: string, images?: { [key: string]: string }): stri
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     
     // Wrap lists in ul tags
-    .replace(/(<li.*<\/li>)\n(<li.*<\/li>)/gs, '<ul class="my-4">$1$2</ul>')
+    .replace(/(<li.*?<\/li>)[\n\r]*(<li.*?<\/li>)/g, '<ul class="my-4">$1$2</ul>')
 
   // Handle images
   if (images) {
@@ -303,7 +303,7 @@ function BlogPostList({ posts, onSelectPost, onEdit, onDelete }: BlogPostListPro
       <div className="space-y-4">
         {posts.length === 0 ? (
           <div className="text-center py-8">
-            <p className="text-muted-foreground">No posts yet. Click "New Monthly Report" to create one.</p>
+            <p className="text-muted-foreground">No posts yet. Click &quot;New Monthly Report&quot; to create one.</p>
           </div>
         ) : (
           posts.map((post) => (
@@ -398,6 +398,24 @@ export default function Dashboard() {
     checkAuth()
   }, [router])
 
+  useEffect(() => {
+    const fetchPosts = async () => {
+      try {
+        const response = await fetch('/api/posts')
+        if (response.ok) {
+          const data = await response.json()
+          setPosts(data)
+        }
+      } catch (error) {
+        console.error('Error fetching posts:', error)
+      }
+    }
+  
+    if (isAuthenticated) {
+      fetchPosts()
+    }
+  }, [isAuthenticated])
+
   const handleLogout = () => {
     sessionStorage.removeItem('credentials')
     router.push('/login')
@@ -417,25 +435,6 @@ export default function Dashboard() {
   if (!isAuthenticated) {
     return null
   }
-
-// Fetch posts
-useEffect(() => {
-    const fetchPosts = async () => {
-      try {
-        const response = await fetch('/api/posts')
-        if (response.ok) {
-          const data = await response.json()
-          setPosts(data)
-        }
-      } catch (error) {
-        console.error('Error fetching posts:', error)
-      }
-    }
-  
-    if (isAuthenticated) {
-      fetchPosts()
-    }
-  }, [isAuthenticated])
   
   // Update addPost function
   const addPost = async (post: Omit<BlogPost, 'id' | 'createdAt'>) => {
@@ -517,8 +516,14 @@ useEffect(() => {
         {isEditing ? (
           <div className="max-w-4xl mx-auto">
             <BlogPostForm 
-              post={editingPost} 
-              onSubmit={editingPost ? updatePost : addPost} 
+              post={editingPost || undefined}
+              onSubmit={(post) => {
+                if ('id' in post) {
+                  updatePost(post)
+                } else {
+                  addPost(post)
+                }
+              }}
               onCancel={() => {
                 setIsEditing(false)
                 setEditingPost(null)
@@ -551,5 +556,4 @@ useEffect(() => {
       </footer>
     </div>
   )
-  
 }
