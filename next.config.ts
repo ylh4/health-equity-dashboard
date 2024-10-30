@@ -1,26 +1,22 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
-  typescript: {
-    ignoreBuildErrors: true,
-  },
   images: {
     remotePatterns: [
       {
         protocol: 'https',
         hostname: '**',
-      },
-      {
-        protocol: 'data',
-        hostname: '**',
-      },
+      }
     ],
     dangerouslyAllowSVG: true,
-    contentDispositionType: 'attachment',
     contentSecurityPolicy: "default-src 'self'; script-src 'none'; sandbox;",
+    unoptimized: true // This allows base64 images
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
   }
 }
 
-module.exports = nextConfig 
+module.exports = nextConfig
