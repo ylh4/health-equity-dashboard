@@ -1,18 +1,19 @@
 datasource db {
-  provider = "postgresql"
-  url      = env("POSTGRES_PRISMA_URL")
+  provider  = "postgresql"
+  url       = env("POSTGRES_PRISMA_URL")
   directUrl = env("POSTGRES_URL_NON_POOLING")
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
   engineType = "binary"
 }
 
 model Post {
   id        Int      @id @default(autoincrement())
   title     String
-  content   String[]
-  images    Json
+  content   String // Changed from String[] to String
+  images    String[] // This is correct for image URLs
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }

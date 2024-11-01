@@ -1,7 +1,7 @@
 'use client'
 
 import Image from 'next/image'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { PlusCircle, Activity, ImageIcon } from 'lucide-react'
 import { Button } from "@/components/ui/button"
@@ -9,66 +9,10 @@ import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 
-interface BlogPost {
-  id: number
-  title: string
-  content: string[]
-  images: { [key: string]: string }
-  createdAt: number
-}
-
-
-function processMarkdown(text: string, images?: { [key: string]: string }): string {
-    // Process headings first (to avoid conflicts)
-    let processedText = text
-      .replace(/^### (.*$)/gm, '<h3 class="text-xl font-bold mt-6 mb-3">$1</h3>')
-      .replace(/^## (.*$)/gm, '<h2 class="text-2xl font-bold mt-8 mb-4">$1</h2>')
-      .replace(/^# (.*$)/gm, '<h1 class="text-3xl font-bold mt-10 mb-5">$1</h1>')
-      
-      // Process nested bullet points with bold
-      .replace(/^-- \*\*(.*?)\*\*/gm, '<li class="ml-8 mb-1"><strong>$1</strong></li>')
-      .replace(/^-- (.*$)/gm, '<li class="ml-8 mb-1">$1</li>')
-      .replace(/^- \*\*(.*?)\*\*/gm, '<li class="mb-1"><strong>$1</strong></li>')
-      .replace(/^- (.*$)/gm, '<li class="mb-1">$1</li>')
-      
-      // Process remaining bold text
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      
-      // Wrap lists in ul tags
-      .replace(/(<li.*?<\/li>)[\n\r]*(<li.*?<\/li>)/g, '<ul class="my-4">$1$2</ul>')
-  
-    // Handle images
-    if (images) {
-      processedText = processedText.replace(/!\[Image\]$$(\d+-\d+)$$/g, (_, imageKey) => {
-        const imageUrl = images[imageKey]
-        if (!imageUrl) return ''
-        
-        return `
-          <div class="relative my-4 max-w-full">
-            <img
-              src="${imageUrl}"
-              alt="Content image"
-              class="rounded-lg shadow-sm max-w-full h-auto mx-auto"
-              style="max-height: 500px; object-fit: contain;"
-              loading="lazy"
-            />
-          </div>
-        `
-      })
-    }
-  
-    // Handle paragraphs and line breaks
-    processedText = processedText
-      .replace(/\n\n/g, '</p><p class="my-1">')
-      .replace(/\n/g, '<br />')
-  
-    // Wrap in paragraph if not already wrapped in HTML
-    if (!processedText.match(/^<[^>]+>/)) {
-      processedText = `<p class="my-1">${processedText}</p>`
-    }
-  
-    return processedText
-  
+declare global {
+  interface Window {
+    cloudinary: any;
+  }
 }
 
 function Logo() {
@@ -78,10 +22,136 @@ function Logo() {
       <div className="flex flex-col">
         <span className="text-xl font-bold text-primary">Health Equity Dashboard</span>
         <span className="text-sm text-muted-foreground">Monthly Insights</span>
+        <a
+          href="https://unchcs-my.sharepoint.com/:w:/g/personal/u390093_unch_unc_edu/EUnZq6xSEwBMsFB_Crod85sBo9yR7xbyfEqx-Z7iowl0sA?e=rYFMth"
+          className="text-xs text-muted-foreground"
+          style={{ fontFamily: 'Arial, sans-serif', fontSize: '10px', color: 'gray', textDecoration: 'none' }}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Request Access to the Dashboard or
+        </a>
+        <a
+          href="https://insights.unch.unc.edu/#/site/UNCHCS/views/HealthEquityDashboard/HomePage?:iid=1"
+          className="text-xs text-muted-foreground"
+          style={{ fontFamily: 'Arial, sans-serif', fontSize: '10px', color: 'gray', textDecoration: 'none' }}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Go to the Dashboard
+        </a>
       </div>
     </div>
-  )
+  );
 }
+
+export { Logo };
+
+interface BlogPost {
+    id: number
+    title: string
+    content: string  // Changed from string[] to string
+    images: string[] // Changed from object to string array
+    createdAt: number
+  }
+
+  function processMarkdown(text: string, images?: string[]): string {
+    if (!text) return '';
+    
+    let processedText = text;
+    const imageUrls = [...(images || [])];
+
+    // Split content into sections
+    const sections = processedText.split(/(?=^# )/gm);
+
+    // Process each section
+    processedText = sections.map(section => {
+      if (!section.trim()) return '';
+
+      let sectionContent = section;
+
+      // Process headings
+      sectionContent = sectionContent
+        .replace(/^# (.*$)/gm, '<h1 class="text-3xl font-bold mt-10 mb-5">$1</h1>')
+        .replace(/^## (.*$)/gm, '<h2 class="text-2xl font-bold mt-8 mb-4">$1</h2>')
+        .replace(/^### (.*$)/gm, '<h3 class="text-xl font-bold mt-6 mb-3">$1</h3>');
+
+      // Process bullet points
+      sectionContent = sectionContent
+        .replace(/^-- \*\*(.*?)\*\*/gm, '<li class="ml-8 mb-1"><strong>$1</strong></li>')
+        .replace(/^-- (.*$)/gm, '<li class="ml-8 mb-1">$1</li>')
+        .replace(/^- \*\*(.*?)\*\*/gm, '<li class="mb-1"><strong>$1</strong></li>')
+        .replace(/^- (.*$)/gm, '<li class="mb-1">$1</li>');
+
+      // Wrap bullet points in ul tags
+      sectionContent = sectionContent.replace(
+        /(<li[^>]*>.*<\/li>\n*)+/g,
+        match => `<ul class="list-disc list-inside my-4">${match}</ul>`
+      );
+
+      // Process images
+      sectionContent = sectionContent.replace(/\[Image\]/g, () => {
+        const imageUrl = imageUrls.shift();
+        if (!imageUrl) return '';
+        
+        return `
+          <div class="my-6">
+            <img 
+              src="${imageUrl}"
+              alt="Content image"
+              class="rounded-lg shadow-sm max-w-full h-auto mx-auto"
+              style="max-height: 500px; object-fit: contain;"
+            />
+          </div>
+        `.trim();
+      });
+
+      // Process bold text
+      sectionContent = sectionContent.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+      // Process paragraphs
+      sectionContent = sectionContent
+        .split('\n\n')
+        .map(para => {
+          para = para.trim();
+          if (!para) return '';
+          if (para.startsWith('<')) return para;
+          return `<p class="my-4">${para.replace(/\n/g, '<br />')}</p>`;
+        })
+        .filter(Boolean)
+        .join('\n');
+
+      return `<section class="mb-8">${sectionContent}</section>`;
+    }).join('\n');
+
+    return processedText;
+  }
+
+  // Update BlogPostContent component
+  function BlogPostContent({ content, images }: { content: string, images: string[] }) {
+    const [isClient, setIsClient] = useState(false)
+    
+    useEffect(() => {
+      setIsClient(true)
+    }, [])
+
+    const processedContent = useMemo(() => {
+      return processMarkdown(content, images)
+    }, [content, images])
+
+    if (!isClient) {
+      return <div>Loading...</div>
+    }
+
+    return (
+      <div className="prose prose-sm max-w-none">
+        <div 
+          dangerouslySetInnerHTML={{ __html: processedContent }} 
+          className="space-y-4"
+        />
+      </div>
+    )
+  }
 
 interface BlogPostFormProps {
   post?: BlogPost
@@ -90,151 +160,171 @@ interface BlogPostFormProps {
 }
 
 function BlogPostForm({ post, onSubmit, onCancel }: BlogPostFormProps) {
-  const [title, setTitle] = useState(post?.title || '')
-  const [content, setContent] = useState<string[]>(() => {
-    if (post?.content) {
-      return post.content.map((text, index) => {
-        return text.replace(/<img[^>]+src="([^"]+)"[^>]*>/g, `\n[Image #${index}]\n`)
-      })
-    }
-    return ['']
-  })
-  const [images, setImages] = useState<{ [key: string]: string }>(post?.images || {})
-  const [cursorPositions, setCursorPositions] = useState<{ [key: number]: number }>({})
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    const processedContent = content.map((text, index) => {
-      return text.replace(/\[Image #\d+\]/g, () => {
-        const imageKey = Object.keys(images).find(key => key.startsWith(`${index}-`))
-        if (imageKey && images[imageKey]) {
-          return `![Image]$$${imageKey}$$`
-        }
-        return ''
-      })
-    })
-
-    if (post?.id) {
-      onSubmit({ ...post, title, content: processedContent, images })
-    } else {
-      onSubmit({ title, content: processedContent, images })
-    }
-  }
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    try {
-      const reader = new FileReader()
-      reader.onloadend = () => {
-        const imageUrl = reader.result as string
-        const imageKey = `${index}-${Date.now()}`
-        setImages(prev => ({ ...prev, [imageKey]: imageUrl }))
-
-        const textarea = document.querySelector(`textarea[name="paragraph-${index}"]`) as HTMLTextAreaElement
-        if (!textarea) return
-
-        const cursorPos = cursorPositions[index] || textarea.selectionStart
-        const textBefore = content[index].substring(0, cursorPos)
-        const textAfter = content[index].substring(cursorPos)
-        
-        const imagePlaceholder = `\n[Image #${index}]\n`
-        const newContent = [...content]
-        newContent[index] = textBefore + imagePlaceholder + textAfter
-        setContent(newContent)
-
-        const newPos = cursorPos + imagePlaceholder.length
-        setCursorPositions({ ...cursorPositions, [index]: newPos })
+    const [title, setTitle] = useState(post?.title || '')
+    const [content, setContent] = useState(() => {
+      if (post?.content) {
+        return post.content.replace(/<img[^>]+src="([^"]+)"[^>]*>/g, '\n[Image]\n')
       }
-      reader.readAsDataURL(file)
-    } catch (error) {
-      console.error('Error uploading image:', error)
+      return ''
+    })
+    const [images, setImages] = useState<string[]>(post?.images || [])
+    const [cursorPosition, setCursorPosition] = useState<number>(0)
+    const [isClient, setIsClient] = useState(false)
+  
+    useEffect(() => {
+      setIsClient(true)
+      // Load Cloudinary script
+      const script = document.createElement('script')
+      script.src = 'https://upload-widget.cloudinary.com/global/all.js'
+      script.async = true
+      document.body.appendChild(script)
+    }, [])
+  
+    const handleSubmit = (e: React.FormEvent) => {
+      e.preventDefault()
+      let processedContent = content
+      
+      // Don't modify the content directly, let processMarkdown handle it
+      if (post?.id) {
+        onSubmit({ ...post, title, content: processedContent, images })
+      } else {
+        onSubmit({ title, content: processedContent, images })
+      }
     }
-  }
+  
+    const handleImageUpload = () => {
+      if (!isClient) return // Don't run on server
+      
+      const widget = window.cloudinary.createUploadWidget(
+        {
+          cloudName: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
+          uploadPreset: 'health_dashboard',
+        },
+        (error: any, result: any) => {
+          if (!error && result && result.event === 'success') {
+            const imageUrl = result.info.secure_url
+            setImages(prev => [...prev, imageUrl])
+            insertImagePlaceholder(imageUrl)
+          }
+        }
+      )
 
-  const handleCursorChange = (e: React.SyntheticEvent<HTMLTextAreaElement>, index: number) => {
-    const textarea = e.currentTarget
-    setCursorPositions({ ...cursorPositions, [index]: textarea.selectionStart })
-  }
+      widget.open()
+    }
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <Input
-        type="text"
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        placeholder="Enter title"
-        className="text-lg font-medium"
-        required
-      />
-      <div className="bg-muted p-4 rounded-lg text-sm space-y-2">
-        <p>Formatting Guide:</p>
-        <p># Text - Heading 1</p>
-        <p>## Text - Heading 2</p>
-        <p>### Text - Heading 3</p>
-        <p>**Text** - Bold text</p>
-        <p>- Text - Bullet point</p>
-        <p>-- Text - Nested bullet point</p>
-        <p>- **Text** - Bold bullet point</p>
-        <p>-- **Text** - Bold nested bullet point</p>
-      </div>
-      {content.map((text, index) => (
-        <div key={index} className="space-y-2 border p-4 rounded-lg">
+    const insertImagePlaceholder = (imageUrl: string) => {
+      const textarea = document.querySelector('textarea') as HTMLTextAreaElement
+      if (!textarea) return
+
+      const cursorPos = cursorPosition || textarea.selectionStart
+      const textBefore = content.substring(0, cursorPos)
+      const textAfter = content.substring(cursorPos)
+      
+      const imagePlaceholder = '\n[Image]\n'
+      setContent(textBefore + imagePlaceholder + textAfter)
+
+      const newPos = cursorPos + imagePlaceholder.length
+      setCursorPosition(newPos)
+    }
+
+    const compressImage = async (file: File): Promise<Blob> => {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          const img = document.createElement('img')
+          img.onload = () => {
+            const canvas = document.createElement('canvas')
+            const MAX_WIDTH = 1200
+            const MAX_HEIGHT = 1200
+            let width = img.width
+            let height = img.height
+
+            if (width > height) {
+              if (width > MAX_WIDTH) {
+                height *= MAX_WIDTH / width
+                width = MAX_WIDTH
+              }
+            } else {
+              if (height > MAX_HEIGHT) {
+                width *= MAX_HEIGHT / height
+                height = MAX_HEIGHT
+              }
+            }
+
+            canvas.width = width
+            canvas.height = height
+            const ctx = canvas.getContext('2d')
+            ctx?.drawImage(img, 0, 0, width, height)
+
+            canvas.toBlob(
+              (blob) => {
+                if (blob) {
+                  resolve(blob)
+                } else {
+                  reject(new Error('Canvas to Blob conversion failed'))
+                }
+              },
+              'image/jpeg',
+              0.7
+            )
+          }
+          img.src = e.target?.result as string
+        }
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+    }
+  
+    const handleCursorChange = (e: React.SyntheticEvent<HTMLTextAreaElement>) => {
+      const textarea = e.currentTarget
+      setCursorPosition(textarea.selectionStart)
+    }
+  
+    // Render loading state or null during server-side rendering
+    if (!isClient) {
+      return <div>Loading...</div>
+    }
+  
+    return (
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <Input
+          type="text"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          placeholder="Enter title"
+          className="text-lg font-medium"
+          required
+        />
+        <div className="space-y-2 border p-4 rounded-lg">
           <div className="flex items-center gap-2 mb-2">
             <Dialog>
               <DialogTrigger asChild>
-                <Button type="button" variant="outline" size="sm">
+                <Button type="button" variant="outline" size="sm" onClick={handleImageUpload}>
                   <ImageIcon className="h-4 w-4 mr-2" />
                   Insert Image
                 </Button>
               </DialogTrigger>
-              <DialogContent aria-describedby="dialog-description">
-                <DialogHeader>
-                  <DialogTitle>Upload Image</DialogTitle>
-                  <p id="dialog-description" className="text-sm text-muted-foreground">
-                    Select an image file to upload to your post.
-                  </p>
-                </DialogHeader>
-                <Input
-                  type="file"
-                  onChange={(e) => handleImageUpload(e, index)}
-                  accept="image/*"
-                  aria-label="Upload image"
-                />
-              </DialogContent>
             </Dialog>
             <div className="flex gap-2 overflow-x-auto">
-              {Object.entries(images).map(([key, url]) => {
-                if (key.startsWith(`${index}-`)) {
-                  return (
-                    <div key={key} className="relative w-10 h-10">
-                      <img 
-                        src={url}
-                        alt={`Content image ${key}`}
-                        className="object-cover rounded shadow-sm w-full h-full"
-                        loading="lazy"
-                      />
-                    </div>
-                  )
-                }
-                return null
-              })}
+              {images.map((url, index) => (
+                <div key={index} className="relative w-10 h-10">
+                  <img 
+                    src={url}
+                    alt={`Content image ${index}`}
+                    className="object-cover rounded shadow-sm w-full h-full"
+                  />
+                </div>
+              ))}
             </div>
           </div>
           <Textarea
-            name={`paragraph-${index}`}
-            value={text}
-            onChange={(e) => {
-              const newContent = [...content]
-              newContent[index] = e.target.value
-              setContent(newContent)
-            }}
-            onSelect={(e) => handleCursorChange(e, index)}
-            onClick={(e) => handleCursorChange(e, index)}
-            onKeyUp={(e) => handleCursorChange(e, index)}
-            placeholder={`Enter section ${index + 1} content`}
-            className="min-h-[150px] font-mono"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            onSelect={handleCursorChange}
+            onClick={handleCursorChange}
+            onKeyUp={handleCursorChange}
+            placeholder="Enter content"
+            className="min-h-[300px] font-mono"
             required
           />
           <div className="mt-2">
@@ -242,74 +332,46 @@ function BlogPostForm({ post, onSubmit, onCancel }: BlogPostFormProps) {
             <div 
               className="p-4 border rounded-lg prose prose-sm max-w-none mt-1"
               dangerouslySetInnerHTML={{ 
-                __html: processMarkdown(text, images)
+                __html: processMarkdown(content)
               }}
             />
           </div>
         </div>
-      ))}
-      <Button 
-        type="button" 
-        variant="outline" 
-        onClick={() => setContent([...content, ''])}
-        className="w-full"
-      >
-        Add Section
-      </Button>
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Cancel
-        </Button>
-        <Button type="submit">
-          {post ? 'Update' : 'Create'} Post
-        </Button>
-      </div>
-    </form>
-  )
-}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit">
+            {post ? 'Update' : 'Create'} Post
+          </Button>
+        </div>
+      </form>
+    )
+  }
 
 interface BlogPostDetailProps {
   post: BlogPost
   onClose: () => void
 }
 
-
 function BlogPostDetail({ post, onClose }: BlogPostDetailProps) {
-    if (!post) return null
-  
-    return (
-      <div 
-        className="space-y-4 cursor-pointer" 
-        onDoubleClick={onClose}
-        role="article"
-        aria-label="Double click to close"
-      >
-        <h2 className="text-2xl font-bold mb-4">{post.title}</h2>
-        <div className="text-sm text-muted-foreground mb-6">
-          {new Date(post.createdAt).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-          })}
-        </div>
-        {post.content.map((paragraph, index) => (
-          <div 
-            key={index} 
-            className="mb-6 prose prose-sm max-w-none"
-            dangerouslySetInnerHTML={{ 
-              __html: processMarkdown(paragraph, post.images)
-            }}
-          />
-        ))}
-        <div className="text-center text-sm text-muted-foreground mt-4">
-          Double click anywhere to close
-        </div>
-      </div>
-    )
-  }
-  
+  return (
+    <div 
+      className="space-y-4"
+      onDoubleClick={onClose}
+      role="button"
+      tabIndex={0}
+      title="Double-click to close"
+    >
+      <h2 className="text-2xl font-bold mb-4">{post.title}</h2>
+      <BlogPostContent content={post.content} images={post.images} />
+      <p className="text-sm text-muted-foreground text-center mt-4">
+        Double-click anywhere to close
+      </p>
+    </div>
+  );
+}
+
 interface BlogPostListProps {
   posts: BlogPost[]
   onSelectPost: (post: BlogPost) => void
@@ -318,61 +380,70 @@ interface BlogPostListProps {
 }
 
 function BlogPostList({ posts, onSelectPost, onEdit, onDelete }: BlogPostListProps) {
-    if (!Array.isArray(posts)) return null
-  
-    return (
-      <div className="space-y-4">
-        {posts.length === 0 ? (
-          <div className="text-center py-8">
-            <p className="text-muted-foreground">No posts yet. Click &quot;New Monthly Report&quot; to create one.</p>
+  // Sort posts by date (newest first)
+  const sortedPosts = useMemo(() => {
+    return [...posts].sort((a, b) => 
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [posts]);
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  // Get preview content (first few lines, up to first image or 150 characters)
+  const getPreviewContent = (content: string) => {
+    const textBeforeImage = content.split('[Image]')[0];
+    const preview = textBeforeImage.split('\n')
+      .filter(line => !line.startsWith('#'))  // Remove headings
+      .join(' ')
+      .trim();
+    return preview.length > 150 
+      ? preview.substring(0, 150) + '...'
+      : preview;
+  };
+
+  return (
+    <div className="space-y-4">
+      {sortedPosts.map((post) => (
+        <div 
+          key={post.id} 
+          className="border p-4 rounded-lg hover:border-primary/50 transition-colors"
+        >
+          <div className="flex justify-between items-start mb-2">
+            <h2 className="text-xl font-bold">{post.title}</h2>
+            <span className="text-sm text-muted-foreground">
+              {formatDate(post.createdAt)}
+            </span>
           </div>
-        ) : (
-          posts.map((post) => (
-            <div key={post.id} className="border p-4 rounded-lg hover:border-primary/50 transition-colors">
-              <h2 className="text-xl font-bold mb-2">{post.title}</h2>
-              <div className="text-sm text-muted-foreground mb-3">
-                {new Date(post.createdAt).toLocaleDateString('en-US', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
-              </div>
-              <div 
-                className="mb-4 prose prose-sm"
-                dangerouslySetInnerHTML={{ 
-                  __html: processMarkdown(
-                    post.content[0]?.slice(0, 150) + '...', 
-                    post.images
-                  )
-                }} 
-              />
-              <div className="flex items-center gap-2">
-                <Button onClick={() => onSelectPost(post)}>Read More</Button>
-                <Button 
-                  variant="outline" 
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onEdit(post)
-                  }}
-                >
-                  Edit
-                </Button>
-                <Button 
-                  variant="destructive" 
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    onDelete(post.id)
-                  }}
-                >
-                  Delete
-                </Button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-    )
-  }
+          
+          <p className="text-muted-foreground mb-4">
+            {getPreviewContent(post.content)}
+          </p>
+
+          <div className="flex items-center gap-2">
+            <Button onClick={() => onSelectPost(post)}>Read More</Button>
+            <Button variant="outline" onClick={() => onEdit(post)}>Edit</Button>
+            <Button 
+              variant="destructive" 
+              onClick={() => {
+                if (window.confirm('Are you sure you want to delete this post?')) {
+                  onDelete(post.id)
+                }
+              }}
+            >
+              Delete
+            </Button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
   
 export default function Dashboard() {
   const router = useRouter()
@@ -442,6 +513,24 @@ export default function Dashboard() {
     router.push('/login')
   }
 
+  const addPost = async (newPost: Omit<BlogPost, 'id' | 'createdAt'>) => {
+    try {
+      const response = await fetch('/api/posts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newPost),
+      })
+      
+      if (response.ok) {
+        const createdPost = await response.json()
+        setPosts([...posts, createdPost])
+        setIsEditing(false)
+      }
+    } catch (error) {
+      console.error('Error adding post:', error)
+    }
+  }
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -458,55 +547,73 @@ export default function Dashboard() {
   }
   
   // Update addPost function
-  const addPost = async (post: Omit<BlogPost, 'id' | 'createdAt'>) => {
-    try {
-      const response = await fetch('/api/posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(post),
-      })
-      if (response.ok) {
-        const newPost = await response.json()
-        setPosts([newPost, ...posts])
-        setIsEditing(false)
-        setEditingPost(null)
-      }
-    } catch (error) {
-      console.error('Error adding post:', error)
-    }
-  }
 
   const updatePost = async (updatedPost: BlogPost) => {
     if (!updatedPost?.id) return
     
     try {
-      const response = await fetch(`/api/posts/${updatedPost.id}`, {
+      const formattedPost = {
+        title: updatedPost.title,
+        content: updatedPost.content,
+        images: updatedPost.images
+      }
+  
+      const response = await fetch(`/api/posts`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${sessionStorage.getItem('credentials')}`
+        },
         body: JSON.stringify({
-          title: updatedPost.title,
-          content: updatedPost.content,
-          images: updatedPost.images || {}
+          id: updatedPost.id,
+          ...formattedPost
         }),
       })
       
       if (response.ok) {
         const processedPost = await response.json()
-        setPosts(posts.map(post => post.id === updatedPost.id ? processedPost : post))
+        setPosts(prevPosts => 
+          prevPosts.map(post => 
+            post.id === updatedPost.id ? processedPost : post
+          )
+        )
         setSelectedPost(null)
         setIsEditing(false)
         setEditingPost(null)
+      } else {
+        console.error('Failed to update post:', await response.text())
       }
     } catch (error) {
       console.error('Error updating post:', error)
     }
-  }  
-  
-  const deletePost = (id: number) => {
-    if (!id) return
-    setPosts(posts.filter(post => post.id !== id))
-    setSelectedPost(null)
   }
+
+  const deletePost = async (id: number) => {
+    if (!id) return;
+    
+    try {
+      const response = await fetch(`/api/posts`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Basic ${sessionStorage.getItem('credentials')}`
+        },
+        body: JSON.stringify({ id })
+      });
+
+      if (response.ok) {
+        // Only remove from state if delete was successful
+        setPosts(posts.filter(post => post.id !== id));
+        setSelectedPost(null);
+      } else {
+        console.error('Failed to delete post:', await response.text());
+        // Optionally add error handling UI here
+      }
+    } catch (error) {
+      console.error('Error deleting post:', error);
+      // Optionally add error handling UI here
+    }
+  };
 
   const handleEdit = (post: BlogPost) => {
     if (!post?.id) return
